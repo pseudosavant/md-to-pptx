@@ -1,10 +1,9 @@
 # md-to-pptx
 
-Convert constrained Markdown slide decks into editable PowerPoint `.pptx` presentations using real PowerPoint layouts and placeholders.
+`md-to-pptx` is a Markdown-to-PowerPoint CLI for both people and agents. You can use it directly from the terminal, but the format and CLI are intentionally designed to be easy for coding agents to use reliably, and this extends their natural strength with Markdown into generating real, editable PowerPoint slides instead of plain text outlines or ad hoc exports.
 
-`md-to-pptx` is intentionally strict. Each `# H1` starts a slide, YAML front matter controls document and slide behavior, and the renderer fails on ambiguous mappings instead of inventing free-positioned text boxes.
+It converts constrained Markdown slide decks into editable PowerPoint `.pptx` presentations using real PowerPoint layouts and placeholders. The format is intentionally strict: each `# H1` starts a slide, YAML front matter controls document and slide behavior, and the tool exposes inspection-friendly modes like `--syntax`, `--list-layouts`, and `--list-color-schemes` while failing on ambiguous mappings instead of inventing free-positioned text boxes.
 
-`md-to-pptx` is a Markdown-to-PowerPoint CLI for both people and agents. You can use it directly from the terminal, but the format and CLI are intentionally designed to be easy for coding agents to use reliably: slide boundaries are unambiguous, front matter is strict, and the tool exposes inspection-friendly modes like `--syntax`, `--list-layouts`, and `--list-color-schemes`. Agents already work naturally with Markdown, and this extends that strength into generating real, editable PowerPoint slides instead of plain text outlines or ad hoc exports.
 
 ## Install
 
