@@ -1,0 +1,31 @@
+{
+  "document_front_matter_keys": ["aspect_ratio", "fonts", "color_scheme", "background", "title_color", "body_color"],
+  "slide_front_matter_keys": ["layout", "background", "title_color", "body_color", "hide_background_graphics", "notes"],
+  "supported_markdown": [
+    "paragraphs",
+    "bullet_lists",
+    "ordered_lists",
+    "nested_lists_up_to_3_levels",
+    "headings_h2_through_h6",
+    "emphasis",
+    "strong",
+    "inline_code",
+    "links",
+    "fenced_code_blocks",
+    "blockquotes",
+    "pipe_tables",
+    "local_images",
+    "remote_images"
+  ],
+  "unsupported_markdown": [
+    "setext_headings",
+    "indented_code_blocks",
+    "raw_html",
+    "task_lists",
+    "footnotes",
+    "layered_backgrounds",
+    "arbitrary_positioning",
+    "animations"
+  ],
+  "example": "---\naspect_ratio: \"16:9\"\nfonts:\n  body: Aptos\n  headings: Aptos Display\ncolor_scheme:\n  preset: Office\ntitle_color: \"var(--dark-1)\"\nbody_color: \"var(--dark-1)\"\nbackground: \"linear-gradient(90deg, var(--accent-1) 0%, var(--accent-2) 100%)\"\n---\n\n# Title slide\n---\nlayout: Title Slide\nnotes: |\n  Introduce the deck.\n---\n\nA concise subtitle line.\n\n# Overview\n---\nlayout: Title and Content\ntitle_color: \"var(--light-1)\"\nbody_color: \"var(--light-1)\"\nbackground: \"linear-gradient(90deg, var(--accent-1) 0%, var(--accent-2) 100%)\"\n---\n\n## Goals\n- Keep the markdown readable\n- Use real PowerPoint placeholders\n- Fail on ambiguous mappings\n"
+}
