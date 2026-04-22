@@ -5,6 +5,22 @@
 It converts constrained Markdown slide decks into editable PowerPoint `.pptx` presentations using real PowerPoint layouts and placeholders. The format is intentionally strict: each `# H1` starts a slide, YAML front matter controls document and slide behavior, and the tool exposes inspection-friendly modes like `--syntax`, `--list-layouts`, and `--list-color-schemes` while failing on ambiguous mappings instead of inventing free-positioned text boxes.
 
 
+## What it does
+
+Convert markdown like this:
+
+```markdown
+# What markdown-pptx is
+
+`markdown-pptx` converts constrained Markdown slide decks into editable PowerPoint `.pptx` presentations.
+
+It uses real PowerPoint layouts and placeholders, so the output stays easy to edit in PowerPoint instead of becoming a pile of free-positioned text boxes.
+```
+
+Into this:
+
+![Rendered PowerPoint slide example](https://github.com/user-attachments/assets/99859d77-ca0b-4f4c-9dee-ac2be729a0e9)
+
 ## Install
 
 ### Run directly with uvx
