@@ -173,6 +173,40 @@ def test_render_preserves_custom_template_theme_when_markdown_has_no_overrides(t
     assert minor.attrib["typeface"] == "Template Body"
 
 
+def test_render_default_body_paragraph_spacing_without_template_override(tmp_path: Path) -> None:
+    deck = parse_deck(
+        "# Slide\n\nParagraph text.\n",
+        input_path=tmp_path / "deck.md",
+        source_name=str(tmp_path / "deck.md"),
+    )
+    output = tmp_path / "deck.pptx"
+
+    render_pptx(deck, output_path=output, template_path=None, force=False, base_dir=tmp_path)
+
+    with zipfile.ZipFile(output) as zf:
+        slide_xml = zf.read("ppt/slides/slide1.xml").decode("utf-8")
+    assert "<a:lnSpc><a:spcPct val=\"100000\"/></a:lnSpc>" in slide_xml
+    assert "<a:spcBef><a:spcPts val=\"1200\"/></a:spcBef>" in slide_xml
+    assert "<a:spcAft><a:spcPts val=\"600\"/></a:spcAft>" in slide_xml
+
+
+def test_render_preserves_template_paragraph_spacing_when_template_specified(tmp_path: Path) -> None:
+    deck = parse_deck(
+        "# Slide\n\nParagraph text.\n",
+        input_path=tmp_path / "deck.md",
+        source_name=str(tmp_path / "deck.md"),
+    )
+    output = tmp_path / "deck.pptx"
+
+    render_pptx(deck, output_path=output, template_path=default_template_path(), force=False, base_dir=tmp_path)
+
+    with zipfile.ZipFile(output) as zf:
+        slide_xml = zf.read("ppt/slides/slide1.xml").decode("utf-8")
+    assert "<a:lnSpc>" not in slide_xml
+    assert "<a:spcBef>" not in slide_xml
+    assert "<a:spcAft>" not in slide_xml
+
+
 def test_render_background_and_body_image(tmp_path: Path) -> None:
     image_path = tmp_path / "photo.png"
     image_path.write_bytes(PNG_BYTES)

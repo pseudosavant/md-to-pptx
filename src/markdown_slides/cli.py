@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Sequence
 
 from markdown_slides import __version__
 from markdown_slides.assets import default_template_path, list_color_scheme_names, load_syntax_payload
 from markdown_slides.errors import EXIT_INTERNAL, MarkdownSlidesError, UsageError
+from markdown_slides.models import Background, Deck
 from markdown_slides.parser import parse_deck
 from markdown_slides.renderer import list_layouts, render_pptx
 
@@ -37,6 +39,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--template", help="Template PPTX to use instead of the packaged default.")
     parser.add_argument("--base-dir", help="Base directory for resolving relative assets when reading from stdin.")
     parser.add_argument("--force", action="store_true", help="Overwrite an existing output file.")
+    parser.add_argument(
+        "--ignore-document-colors",
+        action="store_true",
+        help="Ignore document-level color settings from markdown and keep the template colors as the base.",
+    )
+    parser.add_argument(
+        "--ignore-slide-colors",
+        action="store_true",
+        help="Ignore slide-level color settings from markdown.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit structured JSON output.")
     parser.add_argument("--list-layouts", action="store_true", help="List available template layouts.")
     parser.add_argument("--list-color-schemes", action="store_true", help="List baked-in Office color schemes.")
@@ -125,6 +137,11 @@ def _run(args, *, stdout, stderr) -> int:
         source_name = str(input_path)
     output_path = Path(output_arg).resolve() if output_arg else Path(str((input_path or Path("deck")).with_suffix(".pptx"))).resolve()
     deck = parse_deck(source_text, input_path=input_path, source_name=source_name)
+    deck = _apply_color_ignore_flags(
+        deck,
+        ignore_document_colors=args.ignore_document_colors,
+        ignore_slide_colors=args.ignore_slide_colors,
+    )
     rendered_path = render_pptx(
         deck,
         output_path=output_path,
@@ -142,6 +159,8 @@ def _run(args, *, stdout, stderr) -> int:
                     "output": str(rendered_path),
                     "template": str(Path(args.template).resolve() if args.template else default_template_path()),
                     "slides": len(deck.slides),
+                    "ignore_document_colors": args.ignore_document_colors,
+                    "ignore_slide_colors": args.ignore_slide_colors,
                 },
                 indent=2,
             )
@@ -173,6 +192,38 @@ def _write_error(exc: MarkdownSlidesError, *, json_mode: bool, stdout, stderr) -
         )
         return
     stderr.write(f"{context.code}: {context.message}\n")
+
+
+def _apply_color_ignore_flags(
+    deck: Deck,
+    *,
+    ignore_document_colors: bool,
+    ignore_slide_colors: bool,
+) -> Deck:
+    if not ignore_document_colors and not ignore_slide_colors:
+        return deck
+    document_background = deck.background
+    if ignore_document_colors and _is_color_background(document_background):
+        document_background = None
+    slides = [
+        replace(
+            slide,
+            text_colors=None if ignore_slide_colors else slide.text_colors,
+            background=None if ignore_slide_colors and _is_color_background(slide.background) else slide.background,
+        )
+        for slide in deck.slides
+    ]
+    return replace(
+        deck,
+        text_colors=None if ignore_document_colors else deck.text_colors,
+        color_scheme=None if ignore_document_colors else deck.color_scheme,
+        background=document_background,
+        slides=slides,
+    )
+
+
+def _is_color_background(background: Background | None) -> bool:
+    return background is not None and background.kind != "image"
 
 
 def _format_syntax(payload: dict[str, object]) -> str:

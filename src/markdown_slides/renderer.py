@@ -34,6 +34,9 @@ SUBTITLE_PLACEHOLDERS = {PP_PLACEHOLDER.SUBTITLE, PP_PLACEHOLDER.BODY}
 BODY_PLACEHOLDERS = {PP_PLACEHOLDER.BODY, PP_PLACEHOLDER.OBJECT}
 TABLE_STYLE_MEDIUM_1_ACCENT_1 = "{B301B821-A1FF-4177-AEE7-76D212191A09}"
 HEADING_SCALE = {2: 1.33, 3: 1.2, 4: 1.1, 5: 1.05, 6: 1.0}
+DEFAULT_BODY_LINE_SPACING = 1.0
+DEFAULT_BODY_SPACE_BEFORE_PT = 12
+DEFAULT_BODY_SPACE_AFTER_PT = 6
 THEME_COLOR_VAR_RE = re.compile(r"^var\(\s*--(?P<name>[a-z0-9-]+)\s*\)$", re.IGNORECASE)
 THEME_COLOR_SCHEME_MAP = {
     "dark-1": "dk1",
@@ -61,6 +64,7 @@ def render_pptx(
     if output_path.exists() and not force:
         raise RenderError("output_exists", f"Output file already exists: {output_path}")
     template = template_path or default_template_path()
+    preserve_template_paragraph_formatting = template_path is not None
     presentation = Presentation(str(template))
     _clear_existing_slides(presentation)
     _apply_aspect_ratio(presentation, deck.aspect_ratio)
@@ -86,7 +90,15 @@ def render_pptx(
                 downloader=downloader,
             )
         _render_title(slide, slide_spec, deck)
-        _render_body(slide, slide_spec, deck, template_defaults=template_defaults, base_dir=base_dir, downloader=downloader)
+        _render_body(
+            slide,
+            slide_spec,
+            deck,
+            template_defaults=template_defaults,
+            preserve_template_paragraph_formatting=preserve_template_paragraph_formatting,
+            base_dir=base_dir,
+            downloader=downloader,
+        )
         _render_notes(slide, slide_spec)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,7 +159,16 @@ def _render_title(slide, slide_spec: Slide, deck: Deck) -> None:
         _set_run_color(run, title_color)
 
 
-def _render_body(slide, slide_spec: Slide, deck: Deck, *, template_defaults: dict[str, float], base_dir: Path, downloader: Downloader) -> None:
+def _render_body(
+    slide,
+    slide_spec: Slide,
+    deck: Deck,
+    *,
+    template_defaults: dict[str, float],
+    preserve_template_paragraph_formatting: bool,
+    base_dir: Path,
+    downloader: Downloader,
+) -> None:
     body = slide_spec.body
     body_color = _resolve_text_color(deck, slide_spec, "body")
     if body_color is None and slide_spec.layout in {"Title Slide", "Section Header"}:
@@ -156,13 +177,27 @@ def _render_body(slide, slide_spec: Slide, deck: Deck, *, template_defaults: dic
         return
     if slide_spec.layout in {"Title Slide", "Section Header"}:
         placeholder = _require_placeholder(slide, SUBTITLE_PLACEHOLDERS, "subtitle")
-        _render_text_flow(placeholder, body, deck, template_defaults=template_defaults, text_color=body_color)
+        _render_text_flow(
+            placeholder,
+            body,
+            deck,
+            template_defaults=template_defaults,
+            text_color=body_color,
+            preserve_template_paragraph_formatting=preserve_template_paragraph_formatting,
+        )
         return
     if slide_spec.layout != "Title and Content":
         raise TemplateError("unsupported_layout", f"Layout '{slide_spec.layout}' is not renderable.")
     placeholder = _require_placeholder(slide, BODY_PLACEHOLDERS, "body")
     if body.paragraphs:
-        _render_text_flow(placeholder, body, deck, template_defaults=template_defaults, text_color=body_color)
+        _render_text_flow(
+            placeholder,
+            body,
+            deck,
+            template_defaults=template_defaults,
+            text_color=body_color,
+            preserve_template_paragraph_formatting=preserve_template_paragraph_formatting,
+        )
         return
     if body.images:
         _render_image(slide, placeholder, body.images[0].src, base_dir=base_dir, downloader=downloader, contain=True, name="MarkdownSlidesImage")
@@ -172,7 +207,15 @@ def _render_body(slide, slide_spec: Slide, deck: Deck, *, template_defaults: dic
         return
 
 
-def _render_text_flow(placeholder, body: BodyContent, deck: Deck, *, template_defaults: dict[str, float], text_color: str | None) -> None:
+def _render_text_flow(
+    placeholder,
+    body: BodyContent,
+    deck: Deck,
+    *,
+    template_defaults: dict[str, float],
+    text_color: str | None,
+    preserve_template_paragraph_formatting: bool,
+) -> None:
     text_frame = placeholder.text_frame
     text_frame.clear()
     text_frame.word_wrap = True
@@ -182,6 +225,7 @@ def _render_text_flow(placeholder, body: BodyContent, deck: Deck, *, template_de
         paragraph = text_frame.paragraphs[0] if index == 0 else text_frame.add_paragraph()
         paragraph.clear()
         _configure_paragraph_bullets(paragraph, paragraph_model)
+        _apply_paragraph_spacing(paragraph, paragraph_model, preserve_template_paragraph_formatting=preserve_template_paragraph_formatting)
         if text_color is not None and paragraph_model.kind != "blockquote":
             _set_paragraph_default_color(paragraph, text_color)
         if paragraph_model.kind == "blockquote":
@@ -279,6 +323,16 @@ def _set_text_character_color(r_pr, color_value: str) -> None:
     solid_fill = OxmlElement("a:solidFill")
     _append_color_choice(solid_fill, color_value)
     r_pr.append(solid_fill)
+
+
+def _apply_paragraph_spacing(paragraph, paragraph_model, *, preserve_template_paragraph_formatting: bool) -> None:
+    if preserve_template_paragraph_formatting:
+        return
+    if paragraph_model.kind != "paragraph":
+        return
+    paragraph.line_spacing = DEFAULT_BODY_LINE_SPACING
+    paragraph.space_before = Pt(DEFAULT_BODY_SPACE_BEFORE_PT)
+    paragraph.space_after = Pt(DEFAULT_BODY_SPACE_AFTER_PT)
 
 
 def _render_table(slide, placeholder, table: TableBlock, deck: Deck) -> None:

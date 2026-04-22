@@ -24,12 +24,16 @@ uv tool install markdown-pptx
 ```powershell
 markdown-pptx deck.md
 markdown-pptx deck.md out.pptx
+markdown-pptx deck.md --ignore-document-colors
+markdown-pptx deck.md --ignore-document-colors --ignore-slide-colors
 markdown-pptx --list-layouts
 markdown-pptx --list-color-schemes
 markdown-pptx --syntax
 ```
 
 When you use `--template`, the template's existing theme colors and theme fonts are kept unless the markdown explicitly sets `color_scheme` or `fonts`.
+
+`--ignore-document-colors` ignores document-level markdown color settings (`color_scheme`, `title_color`, `body_color`, and non-image document backgrounds). `--ignore-slide-colors` ignores slide-level `title_color`, `body_color`, and non-image slide backgrounds. Use both flags together to let the template provide all colors while still keeping the markdown content and layouts.
 
 ## Format
 

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
+import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 
 from markdown_slides import __version__
-from markdown_slides.cli import build_parser, main
+from markdown_slides.assets import default_template_path
+from markdown_slides.cli import _apply_color_ignore_flags, build_parser, main
+from markdown_slides.parser import parse_deck
 
 
 def test_no_args_prints_help() -> None:
@@ -38,6 +43,8 @@ def test_help_mentions_agent_friendly_modes() -> None:
     assert "--list-layouts" in help_text
     assert "--list-color-schemes" in help_text
     assert "--syntax" in help_text
+    assert "--ignore-document-colors" in help_text
+    assert "--ignore-slide-colors" in help_text
     assert "markdown-pptx deck.md" in help_text
 
 
@@ -202,5 +209,154 @@ def test_render_json_output(tmp_path: Path) -> None:
     assert payload["ok"] is True
     assert payload["mode"] == "render"
     assert payload["slides"] == 1
+    assert payload["ignore_document_colors"] is False
+    assert payload["ignore_slide_colors"] is False
     assert Path(payload["output"]).exists()
+    assert stderr.getvalue() == ""
+
+
+def test_apply_color_ignore_flags_keeps_image_backgrounds() -> None:
+    deck = parse_deck(
+        """---
+background: "linear-gradient(90deg, #112233 0%, #445566 100%)"
+title_color: "#010203"
+body_color: "#040506"
+color_scheme:
+  preset: Office
+---
+
+# Slide A
+---
+background: "url('./bg.png')"
+title_color: "#111111"
+body_color: "#222222"
+---
+
+Body
+
+# Slide B
+---
+background: "#778899"
+title_color: "#333333"
+body_color: "#444444"
+---
+
+Body
+""",
+        input_path=Path("deck.md"),
+        source_name="deck.md",
+    )
+
+    adjusted = _apply_color_ignore_flags(deck, ignore_document_colors=True, ignore_slide_colors=True)
+
+    assert adjusted.color_scheme is None
+    assert adjusted.text_colors is None
+    assert adjusted.background is None
+    assert adjusted.slides[0].background is not None
+    assert adjusted.slides[0].background.kind == "image"
+    assert adjusted.slides[0].text_colors is None
+    assert adjusted.slides[1].background is None
+    assert adjusted.slides[1].text_colors is None
+
+
+def test_ignore_document_colors_preserves_template_theme_and_slide_overrides(tmp_path: Path) -> None:
+    ns = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+    template = tmp_path / "template.pptx"
+    shutil.copyfile(default_template_path(), template)
+    customized_template = tmp_path / "template-customized.pptx"
+    with zipfile.ZipFile(template, "r") as source, zipfile.ZipFile(
+        customized_template, "w", compression=zipfile.ZIP_DEFLATED
+    ) as target:
+        for info in source.infolist():
+            data = source.read(info.filename)
+            if info.filename == "ppt/theme/theme1.xml":
+                root = ET.fromstring(data)
+                clr = root.find(".//a:clrScheme", ns)
+                assert clr is not None
+                clr.set("name", "Custom Template Theme")
+                accent1 = clr.find("a:accent1", ns)
+                assert accent1 is not None
+                accent1[0].set("val", "ABCDEF")
+                data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            target.writestr(info, data)
+
+    deck = tmp_path / "deck.md"
+    deck.write_text(
+        """---
+color_scheme:
+  preset: Blue Warm
+title_color: "#112233"
+body_color: "#445566"
+---
+
+# Slide
+---
+layout: Title and Content
+title_color: "#778899"
+body_color: "#AABBCC"
+---
+
+Body
+""",
+        encoding="utf-8",
+    )
+    output = tmp_path / "out.pptx"
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    exit_code = main(
+        [str(deck), str(output), "--template", str(customized_template), "--ignore-document-colors"],
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert exit_code == 0
+    with zipfile.ZipFile(output) as zf:
+        theme = ET.fromstring(zf.read("ppt/theme/theme1.xml"))
+        slide_xml = zf.read("ppt/slides/slide1.xml").decode("utf-8")
+    clr = theme.find(".//a:clrScheme", ns)
+    assert clr is not None
+    assert clr.attrib["name"] == "Custom Template Theme"
+    accent1 = clr.find("a:accent1", ns)
+    assert accent1 is not None
+    assert accent1[0].attrib["val"] == "ABCDEF"
+    assert 'val="778899"' in slide_xml
+    assert 'val="AABBCC"' in slide_xml
+    assert 'val="112233"' not in slide_xml
+    assert 'val="445566"' not in slide_xml
+    assert stderr.getvalue() == ""
+
+
+def test_ignore_slide_colors_keeps_document_colors(tmp_path: Path) -> None:
+    deck = tmp_path / "deck.md"
+    deck.write_text(
+        """---
+title_color: "#112233"
+body_color: "#445566"
+---
+
+# Slide
+---
+layout: Title and Content
+title_color: "#778899"
+body_color: "#AABBCC"
+---
+
+Body
+""",
+        encoding="utf-8",
+    )
+    output = tmp_path / "out.pptx"
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    exit_code = main([str(deck), str(output), "--ignore-slide-colors"], stdout=stdout, stderr=stderr)
+
+    assert exit_code == 0
+    with zipfile.ZipFile(output) as zf:
+        slide_xml = zf.read("ppt/slides/slide1.xml").decode("utf-8")
+    assert 'val="112233"' in slide_xml
+    assert 'val="445566"' in slide_xml
+    assert 'val="778899"' not in slide_xml
+    assert 'val="AABBCC"' not in slide_xml
     assert stderr.getvalue() == ""
